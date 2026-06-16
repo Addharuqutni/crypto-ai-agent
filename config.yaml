@@ -1,0 +1,25 @@
+indicators:
+  ema_fast: 20
+  ema_mid: 50
+  ema_slow: 200
+  rsi_length: 14
+  macd_fast: 12
+  macd_slow: 26
+  macd_signal: 9
+  atr_length: 14
+  adx_length: 14
+
+structure:
+  swing_lookback: 3
+  sr_lookback: 120
+  fibonacci_lookback: 120
+  order_block_lookback: 80
+  liquidity_sweep_lookback: 20
+
+rules:
+  rsi_oversold: 30
+  rsi_overbought: 70
+  adx_trend_threshold: 25
+  adx_range_threshold: 18
+  atr_volatility_multiplier: 1.5
+  min_risk_reward: 2.0
