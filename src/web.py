@@ -235,40 +235,60 @@ def _latest_rows(rows: list[dict[str, Any]], limit: int) -> list[dict[str, Any]]
 
 
 def _render_dashboard(rows: list[dict[str, Any]], stats: dict[str, Any]) -> str:
-    table_rows = "".join(_render_row(row) for row in rows)
+    call_cards = "".join(_render_call_card(row) for row in rows) or '<div class="empty">Belum ada action call.</div>'
     return f"""
 <!doctype html>
-<html lang="en">
+<html lang="id">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Crypto AI Agent Dashboard</title>
   <style>
-    body {{ font-family: Arial, sans-serif; margin: 24px; background: #0f172a; color: #e2e8f0; }}
-    h1 {{ margin-bottom: 8px; }}
-    .grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin: 20px 0; }}
-    .card {{ background: #1e293b; padding: 16px; border-radius: 10px; border: 1px solid #334155; }}
-    .card .label {{ color: #94a3b8; font-size: 12px; }}
-    .card .value {{ font-size: 24px; font-weight: bold; margin-top: 6px; }}
-    button {{ background: #2563eb; color: white; border: 0; padding: 10px 14px; border-radius: 8px; cursor: pointer; margin-right: 8px; }}
+    * {{ box-sizing: border-box; }}
+    body {{ font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 24px; background: #0b1220; color: #e2e8f0; }}
+    h1 {{ margin: 0 0 4px 0; font-size: 22px; }}
+    .muted {{ color: #94a3b8; font-size: 13px; }}
+    .stat-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin: 20px 0; }}
+    .stat {{ background: #111c34; padding: 14px 16px; border-radius: 10px; border: 1px solid #1f2a44; }}
+    .stat .label {{ color: #94a3b8; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }}
+    .stat .value {{ font-size: 24px; font-weight: bold; margin-top: 4px; }}
+    .actions-bar {{ display: flex; gap: 8px; margin: 16px 0 24px; flex-wrap: wrap; }}
+    button {{ background: #2563eb; color: white; border: 0; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; }}
     button:hover {{ background: #1d4ed8; }}
-    table {{ width: 100%; border-collapse: collapse; background: #1e293b; border-radius: 10px; overflow: hidden; }}
-    th, td {{ border-bottom: 1px solid #334155; padding: 10px; text-align: left; font-size: 13px; }}
-    th {{ background: #0f172a; color: #93c5fd; position: sticky; top: 0; }}
-    .WIN {{ color: #22c55e; font-weight: bold; }}
-    .LOSS {{ color: #ef4444; font-weight: bold; }}
-    .OPEN {{ color: #f59e0b; font-weight: bold; }}
-    .PENDING {{ color: #94a3b8; font-weight: bold; }}
-    .LONG {{ color: #22c55e; font-weight: bold; }}
-    .SHORT {{ color: #ef4444; font-weight: bold; }}
-    .muted {{ color: #94a3b8; }}
+    button.secondary {{ background: #334155; }}
+    button.secondary:hover {{ background: #475569; }}
+    .calls-grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }}
+    .call-card {{ background: #111c34; border: 1px solid #1f2a44; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 10px; transition: transform .15s, border-color .15s; }}
+    .call-card:hover {{ transform: translateY(-2px); border-color: #3b82f6; }}
+    .call-header {{ display: flex; justify-content: space-between; align-items: center; gap: 8px; }}
+    .symbol {{ font-size: 18px; font-weight: 700; letter-spacing: .3px; }}
+    .badge {{ padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: .5px; }}
+    .badge.LONG {{ background: rgba(34, 197, 94, .15); color: #22c55e; border: 1px solid rgba(34, 197, 94, .35); }}
+    .badge.SHORT {{ background: rgba(239, 68, 68, .15); color: #ef4444; border: 1px solid rgba(239, 68, 68, .35); }}
+    .signal {{ color: #93c5fd; font-size: 12px; font-weight: 600; }}
+    .pnl {{ font-size: 26px; font-weight: 800; }}
+    .pnl.positive {{ color: #22c55e; }}
+    .pnl.negative {{ color: #ef4444; }}
+    .pnl.neutral {{ color: #94a3b8; }}
+    .row {{ display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }}
+    .field {{ background: #0b1220; padding: 8px 10px; border-radius: 8px; border: 1px solid #1f2a44; }}
+    .field .k {{ color: #94a3b8; font-size: 10px; text-transform: uppercase; letter-spacing: .5px; }}
+    .field .v {{ font-size: 13px; font-weight: 600; margin-top: 2px; word-break: break-all; }}
+    .meta {{ display: flex; flex-wrap: wrap; gap: 6px; font-size: 11px; color: #94a3b8; }}
+    .chip {{ background: #0b1220; border: 1px solid #1f2a44; padding: 3px 8px; border-radius: 6px; }}
+    .label-WIN {{ color: #22c55e; }}
+    .label-LOSS {{ color: #ef4444; }}
+    .label-OPEN {{ color: #f59e0b; }}
+    .label-PENDING {{ color: #94a3b8; }}
+    .ai {{ font-size: 11px; color: #cbd5e1; line-height: 1.4; border-top: 1px dashed #1f2a44; padding-top: 8px; }}
+    .empty {{ text-align: center; color: #94a3b8; padding: 40px; background: #111c34; border-radius: 12px; border: 1px dashed #334155; }}
   </style>
 </head>
 <body>
   <h1>Crypto AI Agent Dashboard</h1>
-  <div class="muted">Screening top 100, technical action call, monitoring TP/SL, AI review.</div>
+  <div class="muted">Screening top 100 Binance pairs, MTF action call, monitoring TP/SL, AI review.</div>
 
-  <div class="grid">
+  <div class="stat-grid">
     {_stat_card('Total Calls', stats['total'])}
     {_stat_card('Winrate', str(stats['winrate']) + '%')}
     {_stat_card('WIN', stats['win'])}
@@ -277,22 +297,13 @@ def _render_dashboard(rows: list[dict[str, Any]], stats: dict[str, Any]) -> str:
     {_stat_card('PENDING', stats['pending'])}
   </div>
 
-  <p>
+  <div class="actions-bar">
     <button onclick="runJob('/api/scan')">Run Scan</button>
     <button onclick="runJob('/api/evaluate')">Evaluate TP/SL</button>
-    <button onclick="location.reload()">Refresh</button>
-  </p>
+    <button class="secondary" onclick="location.reload()">Refresh</button>
+  </div>
 
-  <table>
-    <thead>
-      <tr>
-        <th>Created</th><th>Symbol</th><th>TF</th><th>Action</th><th>Signal</th>
-        <th>Entry</th><th>Realtime</th><th>TP</th><th>SL</th><th>RR</th><th>Status</th><th>Label</th><th>PNL%</th>
-        <th>AI</th><th>Score</th><th>Reason</th>
-      </tr>
-    </thead>
-    <tbody>{table_rows}</tbody>
-  </table>
+  <div class="calls-grid">{call_cards}</div>
 
 <script>
 async function runJob(url) {{
@@ -300,6 +311,7 @@ async function runJob(url) {{
   const data = await res.json();
   alert(JSON.stringify(data, null, 2));
 }}
+setTimeout(() => location.reload(), 60000);
 </script>
 </body>
 </html>
@@ -307,37 +319,70 @@ async function runJob(url) {{
 
 
 def _stat_card(label: str, value: Any) -> str:
-    return f'<div class="card"><div class="label">{escape(str(label))}</div><div class="value">{escape(str(value))}</div></div>'
+    return f'<div class="stat"><div class="label">{escape(str(label))}</div><div class="value">{escape(str(value))}</div></div>'
 
 
-def _render_row(row: dict[str, Any]) -> str:
-    label = escape(str(row.get("label") or "PENDING"))
-    action = escape(str(row.get("action") or ""))
+def _render_call_card(row: dict[str, Any]) -> str:
+    action = str(row.get("action") or "").upper()
+    label = str(row.get("label") or "PENDING").upper()
+    pnl = row.get("pnl_percent")
+    pnl_class = "neutral"
+    pnl_text = "—"
+    if isinstance(pnl, (int, float)):
+        pnl_class = "positive" if pnl > 0 else "negative" if pnl < 0 else "neutral"
+        pnl_text = f"{pnl:+.2f}%"
+
+    ai_decision = row.get("ai_decision") or "NONE"
+    ai_score = row.get("ai_score")
+    ai_reason = row.get("ai_reason")
+    ai_block = ""
+    if ai_decision and ai_decision != "NONE":
+        score_text = f" · score {ai_score}" if ai_score is not None else ""
+        reason_text = f" · {_short_text(ai_reason, 120)}" if ai_reason else ""
+        ai_block = f'<div class="ai">AI {escape(str(ai_decision))}{escape(score_text)}{escape(reason_text)}</div>'
+
     return f"""
-<tr>
-  <td>{_short(row.get('created_at'))}</td>
-  <td>{escape(str(row.get('symbol', '')))}</td>
-  <td>{escape(str(row.get('timeframe', '')))}</td>
-  <td class="{action}">{action}</td>
-  <td>{escape(str(row.get('signal', '')))}</td>
-  <td>{escape(str(row.get('entry_price', '')))}</td>
-  <td>{escape(str(row.get('realtime_price', '')))}</td>
-  <td>{escape(str(row.get('take_profit', '')))}</td>
-  <td>{escape(str(row.get('stop_loss', '')))}</td>
-  <td>{escape(str(row.get('risk_reward', '')))}</td>
-  <td>{escape(str(row.get('outcome_status', '')))}</td>
-  <td class="{label}">{label}</td>
-  <td>{escape(str(row.get('pnl_percent', '')))}</td>
-  <td>{escape(str(row.get('ai_decision') or 'NONE'))}</td>
-  <td>{escape(str(row.get('ai_score') or ''))}</td>
-  <td>{_short(row.get('ai_reason'), 80)}</td>
-</tr>
+<div class="call-card">
+  <div class="call-header">
+    <div>
+      <div class="symbol">{escape(str(row.get('symbol', '-')))}</div>
+      <div class="signal">{escape(str(row.get('signal', '')))}</div>
+    </div>
+    <span class="badge {action}">{escape(action or '—')}</span>
+  </div>
+
+  <div class="pnl {pnl_class}">{escape(pnl_text)}</div>
+
+  <div class="row">
+    <div class="field"><div class="k">Entry</div><div class="v">{escape(_fmt(row.get('entry_price')))}</div></div>
+    <div class="field"><div class="k">Realtime</div><div class="v">{escape(_fmt(row.get('realtime_price')))}</div></div>
+    <div class="field"><div class="k">Take Profit</div><div class="v">{escape(_fmt(row.get('take_profit')))}</div></div>
+    <div class="field"><div class="k">Stop Loss</div><div class="v">{escape(_fmt(row.get('stop_loss')))}</div></div>
+  </div>
+
+  <div class="meta">
+    <span class="chip label-{label}">{escape(label)}</span>
+    <span class="chip">TF {escape(str(row.get('timeframe') or '-'))}</span>
+    <span class="chip">RR {escape(_fmt(row.get('risk_reward')))}</span>
+    <span class="chip">{escape(_short_text(row.get('created_at'), 19))}</span>
+  </div>
+
+  {ai_block}
+</div>
 """
 
 
-def _short(value: Any, limit: int = 24) -> str:
+def _fmt(value: Any) -> str:
+    if value is None or value == "":
+        return "-"
+    if isinstance(value, float):
+        return f"{value:g}"
+    return str(value)
+
+
+def _short_text(value: Any, limit: int = 80) -> str:
     if value is None:
         return ""
     text = str(value)
-    text = text if len(text) <= limit else text[: limit - 3] + "..."
-    return escape(text)
+    return text if len(text) <= limit else text[: limit - 3] + "..."
+
