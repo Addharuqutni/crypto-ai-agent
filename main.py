@@ -1,5 +1,6 @@
 import time
 import schedule
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from rich.console import Console
 from rich.panel import Panel
 
@@ -9,7 +10,7 @@ from src.alert import format_report, send_telegram
 from src.analyzer import analyze
 from src.binance_universe import fetch_binance_top_usdt_symbols
 from src.config import load_settings, load_strategy_config
-from src.data import MarketDataClient
+from src.data import MarketDataClient, get_market_data_client
 from src.dataset import save_action_call_dataset, save_action_call_rows_to_postgres
 from src.evaluator import evaluate_pending_action_calls
 from src.futures_ws import BinanceUSDMFuturesWebSocket, RealtimePrice
@@ -19,6 +20,8 @@ from src.multi_timeframe import analyze_multi_timeframe, is_multi_timeframe_enab
 
 console = Console()
 last_realtime_print: dict[str, float] = {}
+SCAN_WORKERS = 6
+
 
 
 def resolve_symbols(settings) -> list[str]:
@@ -53,7 +56,7 @@ def resolve_symbols(settings) -> list[str]:
 def scan_once() -> None:
     settings = load_settings()
     strategy_config = load_strategy_config()
-    client = MarketDataClient(settings.exchange)
+    client = get_market_data_client(settings.exchange)
     ai_settings = AIModelSettings(
         enabled=settings.ai_model_enabled,
         provider=settings.ai_model_provider,
@@ -64,22 +67,39 @@ def scan_once() -> None:
         min_score=settings.ai_model_min_score,
     )
 
-    dataset_rows = []
-    for symbol in resolve_symbols(settings):
-        try:
-            if is_multi_timeframe_enabled(strategy_config):
-                result = analyze_multi_timeframe(symbol, client, strategy_config, settings.fetch_limit)
-            else:
-                raw_df = client.fetch_ohlcv(symbol, settings.timeframe, settings.fetch_limit)
-                df = add_indicators(raw_df, strategy_config)
-                result = analyze(symbol, settings.timeframe, df, strategy_config)
-            realtime_price = None
-            if build_action_call(result) is not None:
-                realtime_price = client.fetch_ticker_price(symbol)
+    symbols = resolve_symbols(settings)
+    analysis_results: list = []
 
+    def analyze_symbol(symbol: str):
+        if is_multi_timeframe_enabled(strategy_config):
+            return analyze_multi_timeframe(symbol, client, strategy_config, settings.fetch_limit)
+        raw_df = client.fetch_ohlcv(symbol, settings.timeframe, settings.fetch_limit)
+        df = add_indicators(raw_df, strategy_config)
+        return analyze(symbol, settings.timeframe, df, strategy_config)
+
+    with ThreadPoolExecutor(max_workers=SCAN_WORKERS) as executor:
+        future_map = {executor.submit(analyze_symbol, symbol): symbol for symbol in symbols}
+        for future in as_completed(future_map):
+            symbol = future_map[future]
+            try:
+                analysis_results.append((symbol, future.result()))
+            except Exception as error:
+                console.print(f"[red]Error scan {symbol}: {error}[/red]")
+
+    actionable_symbols = [symbol for symbol, result in analysis_results if build_action_call(result) is not None]
+    realtime_prices: dict[str, float] = {}
+    if actionable_symbols:
+        try:
+            realtime_prices = client.fetch_ticker_prices(actionable_symbols)
+        except Exception as error:
+            console.print(f"[yellow]Realtime price bulk fetch error: {error}[/yellow]")
+
+    dataset_rows: list = []
+    for symbol, result in analysis_results:
+        try:
+            realtime_price = realtime_prices.get(symbol)
             ai_review = review_action_call(result, ai_settings)
             report = format_report(result, ai_review, realtime_price)
-
             console.print(Panel(report, title=symbol))
 
             if settings.save_action_dataset:
@@ -92,9 +112,8 @@ def scan_once() -> None:
             should_alert = (not settings.alert_only_signals or result.signal != "HOLD") and ai_approved
             if should_alert:
                 send_telegram(settings.telegram_bot_token, settings.telegram_chat_id, report)
-
         except Exception as error:
-            console.print(f"[red]Error scan {symbol}: {error}[/red]")
+            console.print(f"[red]Error post-process {symbol}: {error}[/red]")
 
     if dataset_rows:
         save_action_call_rows_to_postgres(dataset_rows)

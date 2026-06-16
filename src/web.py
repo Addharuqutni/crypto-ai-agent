@@ -10,7 +10,7 @@ from fastapi.responses import HTMLResponse, PlainTextResponse
 
 from src.config import load_settings
 from src.dataset import DEFAULT_JSONL_PATH
-from src.data import MarketDataClient
+from src.data import MarketDataClient, get_market_data_client
 from src.db import fetch_action_calls
 from src.evaluator import evaluate_pending_action_calls, load_action_call_rows
 from src.exporter import build_training_rows, rows_to_csv, rows_to_jsonl
@@ -76,12 +76,8 @@ def _attach_realtime_prices(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
     prices: dict[str, float] = {}
     try:
-        client = MarketDataClient(settings.exchange)
-        for symbol in symbols:
-            try:
-                prices[symbol] = client.fetch_ticker_price(symbol)
-            except Exception:
-                continue
+        client = get_market_data_client(settings.exchange)
+        prices = client.fetch_ticker_prices(symbols)
     except Exception:
         return rows
 
