@@ -5,8 +5,10 @@ from src.analyzer import AnalysisResult
 ACTION_SIGNALS = {
     "BUY WATCH": "LONG",
     "BULLISH CONTINUATION": "LONG",
+    "BULLISH TREND FOLLOW": "LONG",
     "SELL WATCH": "SHORT",
     "BEARISH CONTINUATION": "SHORT",
+    "BEARISH TREND FOLLOW": "SHORT",
 }
 
 
@@ -29,6 +31,8 @@ def build_action_call(result: AnalysisResult) -> ActionCall | None:
         return None
 
     if result.price is None or result.take_profit is None or result.stop_loss is None:
+        return None
+    if result.risk_reward is not None and result.risk_reward < 1.0:
         return None
 
     return ActionCall(

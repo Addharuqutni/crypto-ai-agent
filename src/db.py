@@ -57,7 +57,7 @@ _DB_INITIALIZED: set[str] = set()
 
 @contextmanager
 def db_connection(database_url: str) -> Iterator[psycopg.Connection[Any]]:
-    conn = psycopg.connect(database_url, row_factory=dict_row)
+    conn = psycopg.connect(database_url, row_factory=dict_row, prepare_threshold=None)
     try:
         yield conn
         conn.commit()

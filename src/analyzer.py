@@ -200,6 +200,12 @@ def analyze(symbol: str, timeframe: str, df: pd.DataFrame, config: dict) -> Anal
         signal = "BUY WATCH"
     elif liquidity_sweep == "BUY_SIDE_LIQUIDITY_SWEEP" and macd_bearish_cross:
         signal = "SELL WATCH"
+    elif rules.get("enable_trend_following_calls", True) and bias == "BULLISH" and regime in {"TRENDING", "TRANSITION"} and latest["macd"] > latest["macd_signal"] and latest["rsi"] < rules.get("rsi_overbought", 70):
+        signal = "BULLISH TREND FOLLOW"
+        reasons.append("Trend-following bullish setup")
+    elif rules.get("enable_trend_following_calls", True) and bias == "BEARISH" and regime in {"TRENDING", "TRANSITION"} and latest["macd"] < latest["macd_signal"] and latest["rsi"] > rules.get("rsi_oversold", 30):
+        signal = "BEARISH TREND FOLLOW"
+        reasons.append("Trend-following bearish setup")
 
     stop_loss, take_profit, risk_reward = calculate_risk_plan(price, support, resistance, bias, float(latest["atr"]))
     if risk_reward and risk_reward < rules["min_risk_reward"]:

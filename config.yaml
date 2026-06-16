@@ -22,4 +22,5 @@ rules:
   adx_trend_threshold: 25
   adx_range_threshold: 18
   atr_volatility_multiplier: 1.5
-  min_risk_reward: 2.0
+  min_risk_reward: 1.2
+  enable_trend_following_calls: true
