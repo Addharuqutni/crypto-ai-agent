@@ -91,8 +91,25 @@ def _attach_realtime_prices(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         symbol = str(item.get("symbol") or "")
         if symbol in prices:
             item["realtime_price"] = prices[symbol]
+            if item.get("label") not in {"WIN", "LOSS"}:
+                item["pnl_percent"] = _calculate_realtime_pnl_percent(item, prices[symbol])
         enriched_rows.append(item)
     return enriched_rows
+
+
+def _calculate_realtime_pnl_percent(row: dict[str, Any], realtime_price: float) -> float | None:
+    try:
+        entry_price = float(row.get("entry_price"))
+        if entry_price <= 0:
+            return None
+        action = str(row.get("action") or "").upper()
+        if action == "LONG":
+            return round((realtime_price - entry_price) / entry_price * 100, 4)
+        if action == "SHORT":
+            return round((entry_price - realtime_price) / entry_price * 100, 4)
+        return None
+    except (TypeError, ValueError):
+        return None
 
 
 @app.get("/api/jobs")
