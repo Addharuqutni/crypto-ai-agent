@@ -1,6 +1,6 @@
 ccxt==4.4.95
 pandas==2.2.2
-pandas-ta==0.3.14b0
+numpy==1.26.4
 python-dotenv==1.0.1
 requests==2.32.3
 schedule==1.2.2
@@ -8,5 +8,5 @@ rich==13.7.1
 PyYAML==6.0.2
 websocket-client==1.8.0
 fastapi==0.115.6
-uvicorn==0.32.1
+uvicorn[standard]==0.32.1
 psycopg[binary]==3.2.3
