@@ -10,6 +10,7 @@ from fastapi.responses import HTMLResponse, PlainTextResponse
 
 from src.config import load_settings
 from src.dataset import DEFAULT_JSONL_PATH
+from src.data import MarketDataClient
 from src.db import fetch_action_calls
 from src.evaluator import evaluate_pending_action_calls, load_action_call_rows
 from src.exporter import build_training_rows, rows_to_csv, rows_to_jsonl
@@ -45,6 +46,7 @@ def index() -> str:
 @app.get("/dashboard", response_class=HTMLResponse)
 def dashboard() -> str:
     rows = _load_action_call_rows(limit=300)
+    rows = _attach_realtime_prices(rows)
     stats = build_stats(rows)
     return _render_dashboard(rows, stats)
 
@@ -53,6 +55,7 @@ def dashboard() -> str:
 def api_action_calls(limit: int = 200) -> dict[str, Any]:
     limit = max(1, min(limit, 1000))
     rows = _load_action_call_rows(limit=limit)
+    rows = _attach_realtime_prices(rows)
     return {"items": rows, "count": len(rows)}
 
 
@@ -60,6 +63,36 @@ def api_action_calls(limit: int = 200) -> dict[str, Any]:
 def api_stats() -> dict[str, Any]:
     rows = _load_action_call_rows(limit=10000)
     return build_stats(rows)
+
+
+def _attach_realtime_prices(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if not rows:
+        return rows
+
+    settings = load_settings()
+    symbols = sorted({str(row.get("symbol")) for row in rows if row.get("symbol") and row.get("action")})
+    if not symbols:
+        return rows
+
+    prices: dict[str, float] = {}
+    try:
+        client = MarketDataClient(settings.exchange)
+        for symbol in symbols:
+            try:
+                prices[symbol] = client.fetch_ticker_price(symbol)
+            except Exception:
+                continue
+    except Exception:
+        return rows
+
+    enriched_rows = []
+    for row in rows:
+        item = dict(row)
+        symbol = str(item.get("symbol") or "")
+        if symbol in prices:
+            item["realtime_price"] = prices[symbol]
+        enriched_rows.append(item)
+    return enriched_rows
 
 
 @app.get("/api/jobs")
