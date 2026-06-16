@@ -12,6 +12,7 @@ TRAINING_FEATURE_FIELDS = [
     "signal",
     "status",
     "entry_price",
+    "realtime_price",
     "take_profit",
     "stop_loss",
     "risk_reward",

@@ -4,10 +4,10 @@ from src.ai_model import AIReview, format_ai_review
 from src.analyzer import AnalysisResult
 
 
-def format_report(result: AnalysisResult, ai_review: AIReview | None = None) -> str:
+def format_report(result: AnalysisResult, ai_review: AIReview | None = None, realtime_price: float | None = None) -> str:
     reasons = "\n".join(f"- {reason}" for reason in result.reasons) or "- Tidak ada sinyal kuat"
     fib_lines = "\n".join(f"- {level}: {value}" for level, value in result.fibonacci.items())
-    action_call = format_action_call(result)
+    action_call = format_action_call(result, realtime_price)
     ai_review_text = format_ai_review(ai_review)
 
     if result.order_block:

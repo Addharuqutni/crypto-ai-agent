@@ -24,6 +24,7 @@ CSV_FIELDS = [
     "signal",
     "status",
     "entry_price",
+    "realtime_price",
     "take_profit",
     "stop_loss",
     "risk_reward",
@@ -54,8 +55,12 @@ CSV_FIELDS = [
 ]
 
 
-def build_action_call_dataset_row(result: AnalysisResult, ai_review: AIReview | None = None) -> dict[str, Any] | None:
-    action_call = build_action_call(result)
+def build_action_call_dataset_row(
+    result: AnalysisResult,
+    ai_review: AIReview | None = None,
+    realtime_price: float | None = None,
+) -> dict[str, Any] | None:
+    action_call = build_action_call(result, realtime_price)
     if action_call is None:
         return None
 
@@ -90,11 +95,12 @@ def build_action_call_dataset_row(result: AnalysisResult, ai_review: AIReview | 
 def save_action_call_dataset(
     result: AnalysisResult,
     ai_review: AIReview | None = None,
+    realtime_price: float | None = None,
     jsonl_path: str | Path = DEFAULT_JSONL_PATH,
     csv_path: str | Path = DEFAULT_CSV_PATH,
     mirror_postgres: bool = True,
 ) -> dict[str, Any] | None:
-    row = build_action_call_dataset_row(result, ai_review)
+    row = build_action_call_dataset_row(result, ai_review, realtime_price)
     if row is None:
         return None
 

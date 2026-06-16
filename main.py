@@ -3,6 +3,7 @@ import schedule
 from rich.console import Console
 from rich.panel import Panel
 
+from src.action_call import build_action_call
 from src.ai_model import AIModelSettings, review_action_call
 from src.alert import format_report, send_telegram
 from src.analyzer import analyze
@@ -72,13 +73,17 @@ def scan_once() -> None:
                 raw_df = client.fetch_ohlcv(symbol, settings.timeframe, settings.fetch_limit)
                 df = add_indicators(raw_df, strategy_config)
                 result = analyze(symbol, settings.timeframe, df, strategy_config)
+            realtime_price = None
+            if build_action_call(result) is not None:
+                realtime_price = client.fetch_ticker_price(symbol)
+
             ai_review = review_action_call(result, ai_settings)
-            report = format_report(result, ai_review)
+            report = format_report(result, ai_review, realtime_price)
 
             console.print(Panel(report, title=symbol))
 
             if settings.save_action_dataset:
-                dataset_row = save_action_call_dataset(result, ai_review, mirror_postgres=False)
+                dataset_row = save_action_call_dataset(result, ai_review, realtime_price, mirror_postgres=False)
                 if dataset_row:
                     dataset_rows.append(dataset_row)
                     console.print(f"[green]Saved action dataset: {symbol} {dataset_row['action']}[/green]")

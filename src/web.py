@@ -237,7 +237,7 @@ def _render_dashboard(rows: list[dict[str, Any]], stats: dict[str, Any]) -> str:
     <thead>
       <tr>
         <th>Created</th><th>Symbol</th><th>TF</th><th>Action</th><th>Signal</th>
-        <th>Entry</th><th>TP</th><th>SL</th><th>RR</th><th>Status</th><th>Label</th><th>PNL%</th>
+        <th>Entry</th><th>Realtime</th><th>TP</th><th>SL</th><th>RR</th><th>Status</th><th>Label</th><th>PNL%</th>
         <th>AI</th><th>Score</th><th>Reason</th>
       </tr>
     </thead>
@@ -271,6 +271,7 @@ def _render_row(row: dict[str, Any]) -> str:
   <td class="{action}">{action}</td>
   <td>{escape(str(row.get('signal', '')))}</td>
   <td>{escape(str(row.get('entry_price', '')))}</td>
+  <td>{escape(str(row.get('realtime_price', '')))}</td>
   <td>{escape(str(row.get('take_profit', '')))}</td>
   <td>{escape(str(row.get('stop_loss', '')))}</td>
   <td>{escape(str(row.get('risk_reward', '')))}</td>

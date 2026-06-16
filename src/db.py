@@ -15,6 +15,7 @@ ACTION_CALL_COLUMNS = [
     "signal",
     "status",
     "entry_price",
+    "realtime_price",
     "take_profit",
     "stop_loss",
     "risk_reward",
@@ -85,6 +86,7 @@ def init_db(database_url: str, force: bool = False) -> None:
                 signal TEXT,
                 status TEXT,
                 entry_price DOUBLE PRECISION,
+                realtime_price DOUBLE PRECISION,
                 take_profit DOUBLE PRECISION,
                 stop_loss DOUBLE PRECISION,
                 risk_reward DOUBLE PRECISION,
@@ -121,6 +123,7 @@ def init_db(database_url: str, force: bool = False) -> None:
             )
             """
         )
+        conn.execute("ALTER TABLE action_calls ADD COLUMN IF NOT EXISTS realtime_price DOUBLE PRECISION")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_action_calls_created_at ON action_calls (created_at DESC)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_action_calls_label ON action_calls (label)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_action_calls_symbol ON action_calls (symbol)")

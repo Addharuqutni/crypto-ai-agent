@@ -10,6 +10,15 @@ class MarketDataClient:
         self.exchange = exchange_class({"enableRateLimit": True, "timeout": 30000})
         self.exchange.load_markets()
 
+    def fetch_ticker_price(self, symbol: str) -> float:
+        if symbol not in self.exchange.markets:
+            raise ValueError(f"Symbol tidak tersedia di {self.exchange.id}: {symbol}")
+        ticker = self.exchange.fetch_ticker(symbol)
+        price = ticker.get("last") or ticker.get("close") or ticker.get("bid") or ticker.get("ask")
+        if price is None:
+            raise ValueError(f"Realtime price tidak tersedia untuk {symbol}")
+        return float(price)
+
     def fetch_ohlcv(self, symbol: str, timeframe: str, limit: int = 250) -> pd.DataFrame:
         if symbol not in self.exchange.markets:
             raise ValueError(f"Symbol tidak tersedia di {self.exchange.id}: {symbol}")
