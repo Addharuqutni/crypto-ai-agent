@@ -24,3 +24,4 @@ rules:
   atr_volatility_multiplier: 1.5
   min_risk_reward: 1.2
   enable_trend_following_calls: true
+  enable_multi_timeframe_action_calls: true

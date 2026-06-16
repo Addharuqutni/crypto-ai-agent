@@ -151,8 +151,20 @@ rules:
   adx_trend_threshold: 25
   adx_range_threshold: 18
   atr_volatility_multiplier: 1.5
-  min_risk_reward: 2.0
+  min_risk_reward: 1.2
+  enable_trend_following_calls: true
+  enable_multi_timeframe_action_calls: true
 ```
+
+Algoritma action call multi-timeframe aktif secara default:
+
+```text
+5m = pencarian entry price
+15m dan 30m = konfirmasi setup
+1h dan 4h = arah tren utama
+```
+
+Action call hanya dibuat jika arah 1h dan 4h sejalan, 15m dan 30m mengonfirmasi arah tren, lalu 5m memberi entry dengan risk/reward valid.
 
 ## Menjalankan agent
 

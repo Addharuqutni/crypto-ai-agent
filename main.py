@@ -14,6 +14,7 @@ from src.evaluator import evaluate_pending_action_calls
 from src.futures_ws import BinanceUSDMFuturesWebSocket, RealtimePrice
 from src.indicators import add_indicators
 from src.marketcap import coins_to_quote_symbols, fetch_top_marketcap_coins
+from src.multi_timeframe import analyze_multi_timeframe, is_multi_timeframe_enabled
 
 console = Console()
 last_realtime_print: dict[str, float] = {}
@@ -65,9 +66,12 @@ def scan_once() -> None:
     dataset_rows = []
     for symbol in resolve_symbols(settings):
         try:
-            raw_df = client.fetch_ohlcv(symbol, settings.timeframe, settings.fetch_limit)
-            df = add_indicators(raw_df, strategy_config)
-            result = analyze(symbol, settings.timeframe, df, strategy_config)
+            if is_multi_timeframe_enabled(strategy_config):
+                result = analyze_multi_timeframe(symbol, client, strategy_config, settings.fetch_limit)
+            else:
+                raw_df = client.fetch_ohlcv(symbol, settings.timeframe, settings.fetch_limit)
+                df = add_indicators(raw_df, strategy_config)
+                result = analyze(symbol, settings.timeframe, df, strategy_config)
             ai_review = review_action_call(result, ai_settings)
             report = format_report(result, ai_review)
 
