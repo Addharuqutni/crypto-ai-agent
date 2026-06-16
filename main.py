@@ -6,6 +6,7 @@ from rich.panel import Panel
 from src.ai_model import AIModelSettings, review_action_call
 from src.alert import format_report, send_telegram
 from src.analyzer import analyze
+from src.binance_universe import fetch_binance_top_usdt_symbols
 from src.config import load_settings, load_strategy_config
 from src.data import MarketDataClient
 from src.dataset import save_action_call_dataset, save_action_call_rows_to_postgres
@@ -19,6 +20,19 @@ last_realtime_print: dict[str, float] = {}
 
 
 def resolve_symbols(settings) -> list[str]:
+    if settings.use_binance_top_volume:
+        symbols = fetch_binance_top_usdt_symbols(
+            limit=settings.binance_top_volume_limit,
+            quote=settings.binance_top_volume_quote,
+            include_stablecoins=settings.include_stablecoins,
+            market_type=settings.binance_top_volume_market_type,
+        )
+        console.print(
+            f"[green]Loaded top {len(symbols)} Binance {settings.binance_top_volume_quote} pairs "
+            f"by 24h volume[/green]"
+        )
+        return symbols
+
     if not settings.use_top_marketcap:
         return settings.symbols
 

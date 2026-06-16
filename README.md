@@ -74,8 +74,14 @@ TIMEFRAME=1h
 FETCH_LIMIT=250
 SCAN_INTERVAL_SECONDS=3600
 
-# true = scan coin crypto market cap terbesar dari CoinGecko, false = pakai SYMBOLS manual
-USE_TOP_MARKETCAP=true
+# Preferred: scan top tradable Binance USDT pairs by 24h volume
+USE_BINANCE_TOP_VOLUME=true
+BINANCE_TOP_VOLUME_LIMIT=100
+BINANCE_TOP_VOLUME_QUOTE=USDT
+BINANCE_TOP_VOLUME_MARKET_TYPE=spot
+
+# Optional fallback: scan coin market cap terbesar dari CoinGecko
+USE_TOP_MARKETCAP=false
 TOP_MARKETCAP_LIMIT=100
 TOP_MARKETCAP_QUOTE=USDT
 INCLUDE_STABLECOINS=false
@@ -169,13 +175,13 @@ Mode REST scanner OHLCV + analisis teknikal:
 MARKET_DATA_MODE=rest python main.py
 ```
 
-Scan top 100 market cap:
+Scan top 100 Binance USDT pair by 24h volume:
 
 ```bash
-USE_TOP_MARKETCAP=true TOP_MARKETCAP_LIMIT=100 MARKET_DATA_MODE=rest python main.py
+USE_BINANCE_TOP_VOLUME=true BINANCE_TOP_VOLUME_LIMIT=100 MARKET_DATA_MODE=rest python main.py
 ```
 
-Agent mengambil daftar coin dari CoinGecko, mengubahnya ke pair `{SYMBOL}/USDT`, lalu hanya memproses pair yang tersedia di exchange. Stablecoin dikecualikan secara default dengan `INCLUDE_STABLECOINS=false`.
+Agent mengambil pair yang benar-benar tersedia di Binance, mengurutkan berdasarkan volume 24 jam, lalu memproses 100 pair teratas. Mode CoinGecko market cap tetap tersedia sebagai fallback dengan `USE_TOP_MARKETCAP=true`, tetapi Binance top volume lebih direkomendasikan agar tidak banyak symbol gagal.
 
 Jika `SAVE_ACTION_DATASET=true`, setiap action call non-`HOLD` disimpan ke:
 

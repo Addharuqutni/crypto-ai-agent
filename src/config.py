@@ -25,6 +25,10 @@ class Settings:
     telegram_chat_id: str | None
     alert_only_signals: bool
     use_top_marketcap: bool
+    use_binance_top_volume: bool
+    binance_top_volume_limit: int
+    binance_top_volume_quote: str
+    binance_top_volume_market_type: str
     top_marketcap_limit: int
     top_marketcap_quote: str
     include_stablecoins: bool
@@ -118,6 +122,10 @@ def load_settings() -> Settings:
         telegram_chat_id=os.getenv("TELEGRAM_CHAT_ID") or None,
         alert_only_signals=_get_bool_env("ALERT_ONLY_SIGNALS", True),
         use_top_marketcap=_get_bool_env("USE_TOP_MARKETCAP", False),
+        use_binance_top_volume=_get_bool_env("USE_BINANCE_TOP_VOLUME", False),
+        binance_top_volume_limit=_get_int_env("BINANCE_TOP_VOLUME_LIMIT", 100),
+        binance_top_volume_quote=os.getenv("BINANCE_TOP_VOLUME_QUOTE", "USDT").strip().upper(),
+        binance_top_volume_market_type=os.getenv("BINANCE_TOP_VOLUME_MARKET_TYPE", "spot").strip().lower(),
         top_marketcap_limit=_get_int_env("TOP_MARKETCAP_LIMIT", 100),
         top_marketcap_quote=os.getenv("TOP_MARKETCAP_QUOTE", "USDT").strip().upper(),
         include_stablecoins=_get_bool_env("INCLUDE_STABLECOINS", False),
