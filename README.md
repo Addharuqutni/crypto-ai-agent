@@ -36,7 +36,7 @@ Agent Python untuk memantau harga crypto dan membuat analisis teknikal otomatis.
 ## Instalasi
 
 ```bash
-cd /home/haru/crypto-ai-agent
+cd crypto-ai-agent
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
