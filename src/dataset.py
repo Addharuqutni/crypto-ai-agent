@@ -7,6 +7,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+ACTIVE_OUTCOME_STATUSES = {"PENDING", "OPEN", None, ""}
+ACTION_CALL_KEY_FIELDS = ("symbol", "timeframe", "action", "signal", "entry_price", "take_profit", "stop_loss")
+
 from src.action_call import build_action_call
 from src.ai_model import AIReview, ai_review_to_dict
 from src.analyzer import AnalysisResult
@@ -64,10 +67,13 @@ def build_action_call_dataset_row(
     if action_call is None:
         return None
 
+    action_call_dict = asdict(action_call)
+    row_key = make_action_call_key(action_call_dict)
     order_block = result.order_block
     return {
         "created_at": datetime.now(UTC).isoformat(),
-        **asdict(action_call),
+        "action_call_key": row_key,
+        **action_call_dict,
         "trend": result.trend,
         "regime": result.regime,
         "bias": result.bias,
@@ -92,6 +98,30 @@ def build_action_call_dataset_row(
     }
 
 
+def make_action_call_key(row: dict[str, Any]) -> str:
+    return "|".join(str(row.get(key) or "") for key in ACTION_CALL_KEY_FIELDS)
+
+
+def has_active_duplicate_action_call(row: dict[str, Any], jsonl_path: str | Path = DEFAULT_JSONL_PATH) -> bool:
+    symbol = str(row.get("symbol") or "").upper()
+    path = Path(jsonl_path)
+    if not symbol or not path.exists():
+        return False
+
+    with path.open("r", encoding="utf-8") as file:
+        for line in file:
+            if not line.strip():
+                continue
+            try:
+                existing = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            existing_symbol = str(existing.get("symbol") or "").upper()
+            if existing_symbol == symbol and existing.get("outcome_status") in ACTIVE_OUTCOME_STATUSES:
+                return True
+    return False
+
+
 def save_action_call_dataset(
     result: AnalysisResult,
     ai_review: AIReview | None = None,
@@ -108,6 +138,19 @@ def save_action_call_dataset(
     csv_file = Path(csv_path)
     jsonl_file.parent.mkdir(parents=True, exist_ok=True)
     csv_file.parent.mkdir(parents=True, exist_ok=True)
+
+    if has_active_duplicate_action_call(row, jsonl_file):
+        return None
+
+    settings = load_settings()
+    if settings.self_learning_enabled:
+        from src.self_learning import should_allow_action_call
+
+        allowed, learning_reasons = should_allow_action_call(row)
+        if not allowed:
+            row["self_learning_rejected"] = True
+            row["self_learning_reasons"] = learning_reasons
+            return None
 
     with jsonl_file.open("a", encoding="utf-8") as file:
         file.write(json.dumps(row, ensure_ascii=False, default=str) + "\n")

@@ -3,6 +3,8 @@ from __future__ import annotations
 from contextlib import contextmanager
 from typing import Any, Iterator
 
+from src.dataset import make_action_call_key
+
 import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
@@ -183,10 +185,7 @@ def fetch_action_calls(database_url: str, limit: int = 500, labelled_only: bool 
 
 
 def make_row_key(row: dict[str, Any]) -> str:
-    return "|".join(
-        str(row.get(key) or "")
-        for key in ("created_at", "symbol", "timeframe", "action", "entry_price", "take_profit", "stop_loss")
-    )
+    return str(row.get("action_call_key") or make_action_call_key(row))
 
 
 def _row_values(row: dict[str, Any]) -> list[Any]:

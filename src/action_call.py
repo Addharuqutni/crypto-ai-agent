@@ -35,7 +35,7 @@ def build_action_call(result: AnalysisResult, realtime_price: float | None = Non
 
     if result.price is None or result.take_profit is None or result.stop_loss is None:
         return None
-    if result.risk_reward is not None and result.risk_reward < 1.0:
+    if result.risk_reward is not None and result.risk_reward < 0.5:
         return None
 
     return ActionCall(

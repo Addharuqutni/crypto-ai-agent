@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import threading
 from collections import Counter
+from datetime import UTC, datetime
 from html import escape
 from typing import Any
 
@@ -16,8 +17,16 @@ from src.evaluator import evaluate_pending_action_calls, load_action_call_rows
 from src.exporter import build_training_rows, rows_to_csv, rows_to_jsonl
 
 app = FastAPI(title="Crypto AI Agent Dashboard")
-_job_state: dict[str, Any] = {"scan_running": False, "evaluate_running": False, "last_scan": None, "last_evaluate": None}
+_job_state: dict[str, Any] = {
+    "scan_running": False,
+    "evaluate_running": False,
+    "last_scan": None,
+    "last_evaluate": None,
+    "next_scan_at": None,
+    "next_evaluate_at": None,
+}
 _scheduler_started = False
+_job_lock = threading.Lock()
 
 
 def create_app() -> FastAPI:
@@ -35,7 +44,7 @@ def startup_scheduler() -> None:
         return
 
     _scheduler_started = True
-    threading.Thread(target=_dashboard_scheduler_loop, daemon=True).start()
+    _start_daemon(_dashboard_scheduler_loop)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -113,6 +122,22 @@ def api_jobs() -> dict[str, Any]:
     return _job_state
 
 
+@app.get("/api/learning")
+def api_learning() -> dict[str, Any]:
+    from src.self_learning import load_learned_rules
+
+    return load_learned_rules()
+
+
+@app.post("/api/learning/update")
+def api_learning_update() -> dict[str, Any]:
+    from src.self_learning import update_learned_rules
+
+    rules = update_learned_rules()
+    _job_state["last_learning"] = rules
+    return rules
+
+
 @app.get("/api/export/training.jsonl", response_class=PlainTextResponse)
 def api_export_training_jsonl(limit: int = 10000, labelled_only: bool = True) -> str:
     rows = _load_rows_for_export(limit=limit, labelled_only=labelled_only)
@@ -127,24 +152,46 @@ def api_export_training_csv(limit: int = 10000, labelled_only: bool = True) -> s
 
 @app.post("/api/evaluate")
 def api_evaluate() -> dict[str, Any]:
-    if _job_state["evaluate_running"]:
+    if not _start_job("evaluate"):
         return {"started": False, "message": "evaluation already running", "job_state": _job_state}
 
-    threading.Thread(target=_run_evaluate_job, daemon=True).start()
+    _start_daemon(_run_evaluate_job)
     return {"started": True, "job_state": _job_state}
 
 
 @app.post("/api/scan")
 def api_scan() -> dict[str, Any]:
-    if _job_state["scan_running"]:
+    if not _start_job("scan"):
         return {"started": False, "message": "scan already running", "job_state": _job_state}
 
-    threading.Thread(target=_run_scan_job, daemon=True).start()
+    _start_daemon(_run_scan_job)
     return {"started": True, "job_state": _job_state}
 
 
+def _start_job(name: str) -> bool:
+    running_key = f"{name}_running"
+    with _job_lock:
+        if _job_state[running_key]:
+            return False
+        _job_state[running_key] = True
+        return True
+
+
+def _finish_job(name: str, result: dict[str, Any]) -> None:
+    with _job_lock:
+        _job_state[f"last_{name}"] = result
+        _job_state[f"{name}_running"] = False
+
+
+def _utc_iso(timestamp: float) -> str:
+    return datetime.fromtimestamp(timestamp, UTC).isoformat()
+
+
+def _start_daemon(target: Any) -> None:
+    threading.Thread(target=target, daemon=True).start()
+
+
 def _run_evaluate_job() -> None:
-    _job_state["evaluate_running"] = True
     try:
         settings = load_settings()
         stats = evaluate_pending_action_calls(
@@ -153,40 +200,51 @@ def _run_evaluate_job() -> None:
             fetch_limit=settings.evaluation_fetch_limit,
             max_rows=settings.evaluation_max_rows,
         )
-        _job_state["last_evaluate"] = stats
+        _finish_job("evaluate", stats)
     except Exception as error:
-        _job_state["last_evaluate"] = {"error": str(error)}
-    finally:
-        _job_state["evaluate_running"] = False
+        _finish_job("evaluate", {"error": str(error)})
 
 
 def _run_scan_job() -> None:
-    _job_state["scan_running"] = True
     try:
         from main import scan_once
 
         scan_once()
-        _job_state["last_scan"] = {"status": "completed"}
+        _finish_job("scan", {"status": "completed"})
     except Exception as error:
-        _job_state["last_scan"] = {"error": str(error)}
-    finally:
-        _job_state["scan_running"] = False
+        _finish_job("scan", {"error": str(error)})
 
 
 def _dashboard_scheduler_loop() -> None:
     import time
 
-    last_scan = 0.0
-    last_evaluate = 0.0
+    next_scan = 0.0
+    next_evaluate = 0.0
     while True:
         settings = load_settings()
         now = time.time()
-        if settings.dashboard_auto_scan and not _job_state["scan_running"] and now - last_scan >= settings.dashboard_auto_scan_interval_seconds:
-            last_scan = now
-            threading.Thread(target=_run_scan_job, daemon=True).start()
-        if settings.dashboard_auto_evaluate and not _job_state["evaluate_running"] and now - last_evaluate >= settings.dashboard_auto_evaluate_interval_seconds:
-            last_evaluate = now
-            threading.Thread(target=_run_evaluate_job, daemon=True).start()
+        if settings.dashboard_auto_scan:
+            next_scan = next_scan or now
+            _job_state["next_scan_at"] = _utc_iso(next_scan)
+            if now >= next_scan and _start_job("scan"):
+                next_scan = now + settings.dashboard_auto_scan_interval_seconds
+                _job_state["next_scan_at"] = _utc_iso(next_scan)
+                _start_daemon(_run_scan_job)
+        else:
+            next_scan = 0.0
+            _job_state["next_scan_at"] = None
+
+        if settings.dashboard_auto_evaluate:
+            next_evaluate = next_evaluate or now
+            _job_state["next_evaluate_at"] = _utc_iso(next_evaluate)
+            if now >= next_evaluate and _start_job("evaluate"):
+                next_evaluate = now + settings.dashboard_auto_evaluate_interval_seconds
+                _job_state["next_evaluate_at"] = _utc_iso(next_evaluate)
+                _start_daemon(_run_evaluate_job)
+        else:
+            next_evaluate = 0.0
+            _job_state["next_evaluate_at"] = None
+
         time.sleep(5)
 
 
@@ -248,13 +306,19 @@ def _render_dashboard(rows: list[dict[str, Any]], stats: dict[str, Any]) -> str:
     .stat {{ background: #111c34; padding: 14px 16px; border-radius: 10px; border: 1px solid #1f2a44; }}
     .stat .label {{ color: #94a3b8; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }}
     .stat .value {{ font-size: 24px; font-weight: bold; margin-top: 4px; }}
-    .actions-bar {{ display: flex; gap: 8px; margin: 16px 0 24px; flex-wrap: wrap; }}
+    .actions-bar {{ display: flex; gap: 8px; margin: 16px 0 12px; flex-wrap: wrap; align-items: center; }}
     button {{ background: #2563eb; color: white; border: 0; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; }}
     button:hover {{ background: #1d4ed8; }}
+    button:disabled {{ background: #475569; cursor: not-allowed; opacity: .7; }}
     button.secondary {{ background: #334155; }}
     button.secondary:hover {{ background: #475569; }}
+    .job-status {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin: 0 0 24px; }}
+    .job-card {{ background: #0f172a; border: 1px solid #1f2a44; border-radius: 10px; padding: 12px; font-size: 12px; color: #cbd5e1; }}
+    .job-card b {{ display: block; color: #e2e8f0; font-size: 13px; margin-bottom: 4px; }}
+    .dot {{ display: inline-block; width: 8px; height: 8px; border-radius: 999px; margin-right: 6px; background: #64748b; }}
+    .dot.running {{ background: #22c55e; box-shadow: 0 0 10px rgba(34, 197, 94, .8); }}
     .calls-grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }}
-    .call-card {{ background: #111c34; border: 1px solid #1f2a44; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 10px; transition: transform .15s, border-color .15s; }}
+    .call-card {{ background: linear-gradient(180deg, #111c34, #0f172a); border: 1px solid #1f2a44; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 10px; transition: transform .15s, border-color .15s; }}
     .call-card:hover {{ transform: translateY(-2px); border-color: #3b82f6; }}
     .call-header {{ display: flex; justify-content: space-between; align-items: center; gap: 8px; }}
     .symbol {{ font-size: 18px; font-weight: 700; letter-spacing: .3px; }}
@@ -294,19 +358,44 @@ def _render_dashboard(rows: list[dict[str, Any]], stats: dict[str, Any]) -> str:
   </div>
 
   <div class="actions-bar">
-    <button onclick="runJob('/api/scan')">Run Scan</button>
-    <button onclick="runJob('/api/evaluate')">Evaluate TP/SL</button>
+    <button id="scanBtn" onclick="runJob('/api/scan')">Run Scan</button>
+    <button id="evaluateBtn" onclick="runJob('/api/evaluate')">Evaluate TP/SL</button>
     <button class="secondary" onclick="location.reload()">Refresh</button>
+    <span class="muted" id="lastRefresh">Loaded now</span>
+  </div>
+
+  <div class="job-status">
+    <div class="job-card"><b><span id="scanDot" class="dot"></span>Scan</b><div id="scanText">Loading...</div></div>
+    <div class="job-card"><b><span id="evaluateDot" class="dot"></span>Evaluate</b><div id="evaluateText">Loading...</div></div>
   </div>
 
   <div class="calls-grid">{call_cards}</div>
 
 <script>
+function fmt(value) {{
+  if (!value) return '-';
+  return new Date(value).toLocaleString();
+}}
+function setJob(name, running, last, nextAt) {{
+  document.getElementById(name + 'Dot').className = 'dot' + (running ? ' running' : '');
+  document.getElementById(name + 'Btn').disabled = running;
+  const lastText = last ? JSON.stringify(last) : '-';
+  document.getElementById(name + 'Text').textContent = `status: ${{running ? 'running' : 'idle'}} · next: ${{fmt(nextAt)}} · last: ${{lastText}}`;
+}}
+async function refreshJobs() {{
+  const res = await fetch('/api/jobs');
+  const job = await res.json();
+  setJob('scan', job.scan_running, job.last_scan, job.next_scan_at);
+  setJob('evaluate', job.evaluate_running, job.last_evaluate, job.next_evaluate_at);
+  document.getElementById('lastRefresh').textContent = 'Updated ' + new Date().toLocaleTimeString();
+}}
 async function runJob(url) {{
   const res = await fetch(url, {{ method: 'POST' }});
-  const data = await res.json();
-  alert(JSON.stringify(data, null, 2));
+  await res.json();
+  await refreshJobs();
 }}
+refreshJobs();
+setInterval(refreshJobs, 5000);
 setTimeout(() => location.reload(), 60000);
 </script>
 </body>

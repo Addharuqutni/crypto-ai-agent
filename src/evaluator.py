@@ -7,12 +7,12 @@ from typing import Any
 
 import pandas as pd
 
-from src.dataset import DEFAULT_CSV_PATH, DEFAULT_JSONL_PATH, rewrite_action_call_csv
+from src.dataset import ACTIVE_OUTCOME_STATUSES, DEFAULT_CSV_PATH, DEFAULT_JSONL_PATH, rewrite_action_call_csv
 from src.config import load_settings
 from src.data import MarketDataClient
 from src.db import upsert_action_calls
 
-EVALUATABLE_STATUSES = {None, "", "PENDING", "OPEN"}
+EVALUATABLE_STATUSES = ACTIVE_OUTCOME_STATUSES
 WIN_LABEL = "WIN"
 LOSS_LABEL = "LOSS"
 OPEN_LABEL = "OPEN"
@@ -33,20 +33,27 @@ def evaluate_pending_action_calls(
 
     client = MarketDataClient(exchange_name)
     stats = {"total": len(rows), "pending": 0, "win": 0, "loss": 0, "open": 0, "expired": 0, "errors": 0}
-    evaluated = 0
+    limit = max(fetch_limit, 50)
+    candles_cache: dict[tuple[str, str], pd.DataFrame] = {}
 
-    for row in rows:
-        if row.get("outcome_status") not in EVALUATABLE_STATUSES and row.get("label") != OPEN_LABEL:
-            continue
-        if max_rows is not None and evaluated >= max_rows:
-            break
+    evaluatable_rows = [
+        row
+        for row in rows
+        if row.get("outcome_status") in EVALUATABLE_STATUSES or row.get("label") == OPEN_LABEL
+    ]
+    if max_rows is not None:
+        evaluatable_rows = evaluatable_rows[:max_rows]
 
+    for row in evaluatable_rows:
         stats["pending"] += 1
-        evaluated += 1
         try:
             row_timeframe = str(row.get("timeframe") or timeframe)
-            limit = max(fetch_limit, 50)
-            candles = client.fetch_ohlcv(str(row["symbol"]), row_timeframe, limit=limit)
+            symbol = str(row["symbol"])
+            cache_key = (symbol, row_timeframe)
+            candles = candles_cache.get(cache_key)
+            if candles is None:
+                candles = client.fetch_ohlcv(symbol, row_timeframe, limit=limit)
+                candles_cache[cache_key] = candles
             outcome = evaluate_row_against_candles(row, candles)
             row.update(outcome)
             row.pop("evaluation_error", None)
@@ -59,6 +66,12 @@ def evaluate_pending_action_calls(
     save_action_call_rows(rows, jsonl_path)
     rewrite_action_call_csv(rows, csv_path)
     _mirror_rows_to_postgres(changed_rows)
+    settings = load_settings()
+    if settings.self_learning_enabled:
+        from src.self_learning import update_learned_rules
+
+        learned_rules = update_learned_rules(jsonl_path)
+        stats["learning_sample_size"] = int(learned_rules.get("sample_size") or 0)
     return stats
 
 

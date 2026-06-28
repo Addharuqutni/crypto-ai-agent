@@ -50,6 +50,7 @@ class Settings:
     dashboard_auto_evaluate_interval_seconds: int
     database_url: str | None
     database_enabled: bool
+    self_learning_enabled: bool
 
 
 def _get_int_env(name: str, default: int, minimum: int = 1) -> int:
@@ -147,6 +148,7 @@ def load_settings() -> Settings:
         dashboard_auto_evaluate_interval_seconds=_get_int_env("DASHBOARD_AUTO_EVALUATE_INTERVAL_SECONDS", 300),
         database_url=os.getenv("DATABASE_URL") or None,
         database_enabled=_get_bool_env("DATABASE_ENABLED", False),
+        self_learning_enabled=_get_bool_env("SELF_LEARNING_ENABLED", True),
     )
 
 
